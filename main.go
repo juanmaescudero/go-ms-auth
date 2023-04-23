@@ -18,10 +18,18 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/users", routes.GetUsersHandler).Methods("GET")
-	r.HandleFunc("/users", routes.PostUsersHandler).Methods("POST")
 	r.HandleFunc("/users/{id}", routes.GetUserHandler).Methods("GET")
 	r.HandleFunc("/users/{id}", routes.DeleteUserHandler).Methods("DELETE")
 	r.HandleFunc("/users/{id}", routes.PutUserHandler).Methods("PUT")
+	r.HandleFunc("/users/login", routes.LoginHandler).Methods("POST")
+	r.HandleFunc("/users/register", routes.CreateUsersHandler).Methods("POST")
+	r.HandleFunc("/verify", routes.VerifyJWT).Methods("POST")
+
+	r.HandleFunc("/apps", routes.GetAppsHandler).Methods("GET")
+	r.HandleFunc("/apps/{id}", routes.GetAppHandler).Methods("GET")
+	r.HandleFunc("/apps/{id}", routes.DeleteAppHandler).Methods("DELETE")
+	r.HandleFunc("/apps/{id}", routes.PutAppHandler).Methods("PUT")
+	r.HandleFunc("/apps/register", routes.CreateAppHandler).Methods("POST")
 
 	http.ListenAndServe(":3000", r)
 }
