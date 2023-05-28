@@ -44,11 +44,23 @@ func CreateAppHandler(w http.ResponseWriter, r *http.Request) {
 	var app models.App
 	json.NewDecoder(r.Body).Decode(&app)
 
-	createdApp := db.DB.Create(&app)
-	err := createdApp.Error
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
+	// Verificar si ya existe una aplicación con el mismo nombre
+	var existingApp models.App
+	db.DB.Where("name = ?", app.Name).First(&existingApp)
+	if existingApp.ID == uuid.Nil {
+		// Si no existe una aplicación con el mismo nombre, crear la nueva aplicación
+		createdApp := db.DB.Create(&app)
+		err := createdApp.Error
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+	} else {
+		// Si ya existe una aplicación con el mismo nombre, devolver un error 409 Conflict
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte("App already exists"))
+		return
 	}
 
 	json.NewEncoder(w).Encode(&app)

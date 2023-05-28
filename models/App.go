@@ -8,6 +8,6 @@ import (
 type App struct {
 	gorm.Model
 
-	ID   uuid.UUID `json:"id" gorm:"type:uuid;default:uuid_generate_v4()"`
-	Name string
+	ID   uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+	Name string    `gorm:"not null;type:varchar(100)" json:"name"`
 }

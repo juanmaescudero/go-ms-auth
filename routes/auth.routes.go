@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,13 +12,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/juanmaescudero/go-ms-auth/db"
+	"github.com/juanmaescudero/go-ms-auth/mails"
 	"github.com/juanmaescudero/go-ms-auth/models"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	var users []models.User
-	db.DB.Find(&users)
+	db.DB.Preload("App").Find(&users)
 	json.NewEncoder(w).Encode(&users)
 }
 
@@ -34,7 +37,7 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get user from database
 	var user models.User
-	result := db.DB.First(&user, id)
+	result := db.DB.Preload("App").First(&user, id)
 	if result.RowsAffected == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("User not found"))
@@ -50,20 +53,40 @@ func CreateUsersHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&user)
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		return
 	}
 
 	user.Password = string(hashedPassword)
-	createdUser := db.DB.Create(&user)
+
+	// Compruebe si ya existe un usuario con el mismo nombre de usuario o correo electrónico en la misma aplicación
+	var existingUser models.User
+	err = db.DB.Where("app_id = ? AND (username = ? OR email = ?)", user.AppID, user.Username, user.Email).First(&existingUser).Error
+	if err == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Username or email exists in this app"))
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Cree el usuario
+	createdUser := db.DB.Preload("App").Create(&user)
 	err = createdUser.Error
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		return
 	}
 
 	json.NewEncoder(w).Encode(&user)
+	mails.ConfirmationMail(user.Email, user.ConfirmationToken.String())
 }
 
 func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -206,4 +229,34 @@ func VerifyJWT(w http.ResponseWriter, r *http.Request) {
 	// Return JWT token
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Token valid"))
+}
+
+func ConfirmUserHandler(w http.ResponseWriter, r *http.Request) {
+	var confirmUserRequest models.ConfirmUserRequest
+	json.NewDecoder(r.Body).Decode(&confirmUserRequest)
+
+	var user models.User
+	result := db.DB.Where(&models.User{Email: confirmUserRequest.Email}).First(&user)
+	if result.Error != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	if user.Active {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("User already active"))
+		return
+	}
+
+	if user.ConfirmationToken != confirmUserRequest.Token {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid confirmation token"))
+		return
+	}
+
+	user.Active = true
+	db.DB.Save(&user)
+
+	json.NewEncoder(w).Encode(&user)
 }

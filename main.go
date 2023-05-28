@@ -23,6 +23,7 @@ func main() {
 	r.HandleFunc("/users/{id}", routes.PutUserHandler).Methods("PUT")
 	r.HandleFunc("/users/login", routes.LoginHandler).Methods("POST")
 	r.HandleFunc("/users/register", routes.CreateUsersHandler).Methods("POST")
+	r.HandleFunc("/users/confirm", routes.ConfirmUserHandler).Methods("POST")
 	r.HandleFunc("/verify", routes.VerifyJWT).Methods("POST")
 
 	r.HandleFunc("/apps", routes.GetAppsHandler).Methods("GET")
